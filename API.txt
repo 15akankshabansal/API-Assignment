@@ -1,0 +1,66 @@
+func FindMovieByTitle(title string) (Movie, error) {
+    var movie Movie
+    err := db.Get(&movie, "SELECT * FROM movies WHERE title = ?", title)
+    if err == sql.ErrNoRows {
+        // If the movie is not found in the local database, search in the IMDB API
+        imdbMovies, err := imdbapi.SearchMovies(title)
+        if err != nil {
+            return movie, err
+        }
+        if len(imdbMovies) > 0 {
+            // Store the first movie in the local database
+            movie = imdbMovies[0]
+            _, err := db.Exec("INSERT INTO movies (title, released_year, rating, genres) VALUES (?, ?, ?, ?)", movie.Title, movie.ReleasedYear, movie.Rating, strings.Join(movie.Genres, ","))
+            if err != nil {
+                return movie, err
+            }
+        }
+    } else if err != nil {
+        return movie, err
+    }
+    return movie, nil
+}
+
+//Update genres and rating
+func UpdateMovie(id int, genres []string, rating float64) error {
+    _, err := db.Exec("UPDATE movies SET genres = ?, rating = ? WHERE id = ?", strings.Join(genres, ","), rating, id)
+    return err
+}
+
+
+func FindMovieById(id int) (Movie, error) {
+    var movie Movie
+    err := db.Get(&movie, "SELECT * FROM movies WHERE id = ?", id)
+    return movie, err
+}
+
+func FindMoviesByYear(year int) ([]Movie, error) {
+    var movies []Movie
+    err := db.Select(&movies, "SELECT * FROM movies WHERE released_year = ?", year)
+    return movies, err
+}
+
+func FindMoviesByYearRange(startYear int, endYear int) ([]Movie, error) {
+    var movies []Movie
+    err := db.Select(&movies, "SELECT * FROM movies WHERE released_year BETWEEN ? AND ?", startYear, endYear)
+    return movies, err
+}
+
+func FindMoviesByRatingGreaterThan(rating float64) ([]Movie, error) {
+    var movies []Movie
+    err := db.Select(&movies, "SELECT * FROM movies WHERE rating > ?", rating)
+    return movies, err
+}
+
+func FindMoviesByRatingLessThan(rating float64) ([]Movie, error) {
+    var movies []Movie
+    err := db.Select(&movies, "SELECT * FROM movies WHERE rating < ?", rating)
+    return movies, err
+}
+
+func FindMoviesByGenres(genres []string) ([]Movie, error) {
+    var movies []Movie
+    query := "SELECT * FROM movies WHERE genres LIKE '%" + strings.Join(genres, "%' OR genres LIKE '%") + "%'"
+    err := db.Select(&movies, query)
+    return movies, err
+}
